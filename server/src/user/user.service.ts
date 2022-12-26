@@ -1,13 +1,47 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, User } from '@prisma/client';
+import { compare, hash } from 'bcrypt';
 import { PrismaService } from '../prisma.service';
+import { SignUpDto } from './dto/sign-up.dto';
 
 @Injectable()
 export class UserService {
   constructor(private prisma: PrismaService) {}
 
-  getUserList() {
+  async getUserList() {
     return this.prisma.user.findMany();
+  }
+
+  async signUp(signUpDto: SignUpDto) {
+    const exitUser = await this.getUserByMobile(signUpDto.mobile);
+    if (exitUser) {
+      throw new Error('User already exists');
+    }
+    const { mobile, password, name } = signUpDto;
+    const hash = await this.getPasswordHash(password);
+    const user = await this.prisma.user.create({
+      data: {
+        mobile,
+        name,
+        password: hash,
+        // 暂时先默认值
+        address: 'abc',
+      },
+    });
+    return user.id;
+  }
+
+  getPasswordHash(password: string) {
+    return hash(password, 10);
+  }
+
+  comparePassword(password: string, user: User) {
+    return compare(password, user.password);
+  }
+
+  getUserByMobile(mobile: string) {
+    if (!mobile) return false;
+    return this.prisma.user.findUnique({ where: { mobile } });
   }
 
   async user(
